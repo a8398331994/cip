@@ -1,6 +1,8 @@
 #ifndef CIP_IO_H
 #define CIP_IO_H
 
+#include <stdio.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

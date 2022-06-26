@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include "cip_img.h"
 
-cipImgPtr cipImageCreate(int width, int height)
+/* Create basic image data structure. */
+cipImgPtr cipImgCreate(int width, int height)
 {
     cipImgPtr img;
 
@@ -19,11 +20,12 @@ cipImgPtr cipImageCreate(int width, int height)
     return img;
 }
 
-void cipImageDestory(cipImgPtr img)
+/* Destory image */
+void cipImgDestory(cipImgPtr img)
 {
     int i;
     if (img->pixels) {
-        
+        free(img->pixels);     
     }
 
     if (img->filename) {
@@ -33,6 +35,7 @@ void cipImageDestory(cipImgPtr img)
     free(img);
 }
 
+/* */
 void cipFree(cipImgPtr img)
 {
 

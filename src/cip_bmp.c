@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 /* Create cip image point with bmp image  */
 cipImgPtr cipCreateFromBmp(char *filename) {
     cipImgPtr im = NULL;
@@ -15,6 +16,7 @@ cipImgPtr cipCreateFromBmp(char *filename) {
     if (!bmp_fhd)
         goto free_fp;
 
+    /* Read bmp file header*/
     if (!read_bmp_file_header(fp, bmp_fhd))
         goto free_fhd;
 
@@ -22,16 +24,37 @@ cipImgPtr cipCreateFromBmp(char *filename) {
     if (!bmp_info)
         goto free_fhd;
 
+    /* Read bmp info header*/
     if (!read_bmp_info_header(fp, bmp_info))
         goto free_info;
 
-    im = cipImageCreate(bmp_info->width, bmp_info->height);
+    /* Create default image data */
+    im = cipImgCreate(bmp_info->width, bmp_info->height);
 
     if (!im)
         goto free_info;
 
+    /* For debug to show bmp header file*/
     show_bmp_file_header(bmp_fhd);
     show_bmp_info_header(bmp_info);
+
+    /* Insert pixel data in to image from bmp file,
+     * Different bit per pixel use differernt insert function
+     */
+    int success;
+    switch (bmp_info->bit_per_pixel) {
+    
+    case 24:
+        success = populate_img_pixel(im, bmp_fhd, bmp_info, fp);    
+        break;
+    default:
+        printf("Unsupport pixel bit per pixel format!\n");
+        success = 0;
+        break;
+    }
+    
+    if (!success)
+        cipImgDestory(im);        
 
 free_info:
     free(bmp_info);
@@ -44,6 +67,76 @@ free_fp:
 
     return im;
 }
+
+/* Save cip image to bmp file */
+int cipSaveToBmp(const char *filename, cipImgPtr img)
+{
+    if (!filename || !img) 
+        return 0;
+    
+    /* TODO: Still need to add channel and depth information */
+    if (img->channel != 3 || img->depth != 8) {
+        printf("Still not assign channel and depth information into img!\n");
+        return 0;
+    }
+
+
+    FILE *out = fopen(filename, "w");
+    if (!out)     
+        return 0;
+
+    /* Current support 24bit pixel bmp output */
+    int bmp_pixel_buffer_size = img->width * img->channel * img->depth / BYTE_SIZE * img->height;
+
+    int bmp_info_header_size = BITMAPINFOHEADER;
+
+    int total_size = 14 + bmp_info_header_size + bmp_pixel_buffer_size;
+
+    /* Start write header informatio into output file */
+
+    /* Write bmp file header*/
+    fputc('B', out);
+    fputc('M', out);
+    write_bmp_int(total_size, out);
+    write_bmp_int(0, out);
+    write_bmp_int(14 + bmp_info_header_size, out);
+    
+    /* Write bmp info header*/
+    write_bmp_int(bmp_info_header_size, out); // header size
+    write_bmp_int(img->width, out); // image width
+    write_bmp_int(img->height, out); // image height
+    write_bmp_short(1, out); // image plane
+    write_bmp_short((short)(img->channel * img->depth), out); // bit per pixel
+    write_bmp_int(BMP_BI_RGB, out); // compression
+    write_bmp_int(bmp_pixel_buffer_size, out); // image size
+    write_bmp_int(0, out); // x resolution
+    write_bmp_int(0, out); // y resolution
+    write_bmp_int(256, out); // color used
+    write_bmp_int(0, out); // important color
+
+    int padding = (img->width * img->channel) % 4;
+    padding = padding ? 4 - padding : padding;
+
+    int xpos, ypos;
+    pixel p;
+    for (ypos = 0; ypos < img->height; ypos++) {
+        for (xpos = 0; xpos < img->width; xpos++) {
+            /* Get specific pixel, write to the file with bgr order*/
+            p = getImgPixel(img, xpos, ypos);
+            fputc(p.blue, out);
+            fputc(p.green, out);
+            fputc(p.red, out);
+        }
+        /* Scan padding bytes in the end of row */
+        for (xpos = 0; xpos < padding; xpos++) {
+            fputc('\0', out);
+        }
+    }    
+
+    fclose(out);
+
+}
+
 
 /* Read bmp file info header */
 static int read_bmp_file_header(FILE *fp, bmp_fhd_t *fhd) {
@@ -117,6 +210,76 @@ static int read_bmp_info_header_v3(FILE *fp, bmp_info_t *info) {
     return 1;
 }
 
+/* Populate bmp pixel buffer into image data */
+static int populate_img_pixel(cipImgPtr img, bmp_fhd_t *fhd, bmp_info_t *info, FILE *fp)
+{
+    /* Current version only support non compression populate
+     * method.
+     * */
+    if (info->compression != BMP_BI_RGB) {
+        printf("Current version only support BMP_BI_RGB!\n");
+        return 0;
+    }
+
+    /* Move to fp to pixel buffer position. Use file header offset data
+     * to move fp, if move fail fseek will return non-zero.
+     */
+    if (fseek(fp, fhd->offset, SEEK_SET)) {
+        printf("Can't move fp to pixel buffer position.\n");
+        return 0;
+    }
+
+    img->pixels = (pixel *)malloc(img->width * img->height * sizeof(pixel));
+    if (!img->pixels) {
+        printf("Can't malloc the image pixel buffer.\n");
+        return 0;
+    }
+
+    img->depth = BYTE_SIZE;
+    img->channel = info->bit_per_pixel / BYTE_SIZE;
+        
+    /*
+     * Calculate padding size. The size of each row is rounded up to a multiple
+     * of 4 bytes (a 32 bits DWORD) by padding. Padding bytes must be appended
+     * to the end of rows.
+     * 
+     *       if each row have 6 pixels with 24 bit per pixel, total have 18 bytes data.
+     *       Here need to fill 2 bytes padding data to each row to let it can be multuple of 4.
+     *       
+     *      -------------------> row
+     *      | rgbrgbrgbrgbrgbrgb(pp)
+     *      |         18          2
+     *      v
+     *     col
+     *
+     * Reference: https://stackoverflow.com/questions/2601365/padding-in-24-bits-rgb-bitmap
+     * */
+    int padding = ((info->width * (info->bit_per_pixel / BYTE_SIZE)) % 4);
+    padding = padding ? 4 - padding : padding;
+
+    int index, ypos, xpos;
+    char pad;
+    for (ypos = 0; ypos < info->height; ypos++) {
+        for (xpos = 0; xpos < info->width; xpos++) {
+            index = ypos * info->width + xpos;
+            if (!cip_read_char(&img->pixels[index].blue, fp) || 
+                 !cip_read_char(&img->pixels[index].green, fp) ||
+                 !cip_read_char(&img->pixels[index].red, fp) 
+               ) {
+                return 0;
+            }
+        }
+
+        /* Scan padding bytes in the end of row */
+        for (xpos = 0; xpos < padding; xpos++) {
+            if (!cip_read_char(&pad, fp))
+                return 0;
+        }
+    }
+    
+    return 1;
+}
+
 /* Show bmp file header infomation */
 static void show_bmp_file_header(const bmp_fhd_t *fhd) {
     printf("-----BMP file header-----\n");
@@ -151,3 +314,37 @@ static void show_bmp_info_header(const bmp_info_t *info) {
 
     printf("-------------------------\n");
 }
+
+/* */
+static int write_bmp_short(const short data, FILE *fp)
+{
+   /* Byte order need to be little endian  
+    */
+
+    if (fputc(data & 0xff, fp) == EOF)
+        return 0;
+    if (fputc((data >> 8) & 0xff, fp) == EOF)
+        return 0;
+
+    return 1;
+}
+
+/* */
+static int write_bmp_int(const int data, FILE *fp)
+{
+   /* Byte order need to be little endian
+    *
+    */ 
+
+    if (fputc(data & 0xff, fp) == EOF)
+        return 0;
+    if (fputc((data >> 8) & 0xff, fp) == EOF)
+        return 0;
+    if (fputc((data >> 16) & 0xff, fp) == EOF)
+        return 0;
+    if (fputc((data >> 24) & 0xff, fp) == EOF)
+        return 0;
+
+    return 1;
+}
+

@@ -4,11 +4,10 @@
 
 int main()
 {
-   
+       
     cipImgPtr i = cipCreateFromBmp("test/sample.bmp");
 
-    cipImgPtr t = cipImageCreate(1000, 800);
+    printf("%d \n", i->width);
 
-    printf("%d \n", t->width);
-//    printf("%d \n", i->width);
+    cipSaveToBmp("test/save.bmp", i); 
 }

@@ -59,13 +59,39 @@ typedef struct image_data {
 typedef cipImg *cipImgPtr;
 
 /* Declare function to manipulate images */
-cipImgPtr cipImageCreate(int width, int height);
-void cipImageDestory(cipImgPtr img);
+
+/*
+ * cipImgCreate - Create basic image data structure.
+ * @width: image width
+ * @height: image height
+ *
+ * TODO:Still need to add more information
+ *
+ */
+cipImgPtr cipImgCreate(int width, int height);
+
+/*
+ * cipImgDestory - Destory image 
+ * @img: 
+ *
+ * TODO:Can change to not free image immediately but also
+ * can use its malloc memory to set new buffer. 
+ */
+void cipImgDestory(cipImgPtr img);
+
+/*
+ *
+ */
+cipImgPtr cipImgRead(char *filename);
+
+/* */
 void cipFree(cipImgPtr img);
 
 /* Helper macro */
-#define cipImageWidth(im) (im)->width;
-#define cipImageHeight(im) (im)->height;
+#define getImgWidth(im) (im)->width
+#define getImgHeight(im) (im)->height
+#define getImgPixel(im, x, y) \
+    im->pixels[y * img->width + x]
 
 #ifdef __cplusplus
 }
