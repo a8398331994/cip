@@ -5,13 +5,16 @@
 /*
  * Reference:
  * https://github.com/libgd/libgd
- *
+ * https://github.com/symisc/sod
  */
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+#define cip_buf float
 
 /*
  * pixel - Image pixel structure
@@ -20,12 +23,12 @@ extern "C" {
  * @blue:
  * @alpha:
  */
-typedef struct pixel_data {
-    unsigned char red;
-    unsigned char green;
-    unsigned char blue;
-    unsigned char alpha;
-} pixel;
+//typedef struct pixel_data {
+//    unsigned char red;
+//    unsigned char green;
+//    unsigned char blue;
+//    unsigned char alpha;
+//} cipPixel;
 
 /*
  * cipImg - Base image data format
@@ -34,64 +37,122 @@ typedef struct pixel_data {
  * @height:
  * @depth:
  * @channel:
- * @filename:
  *
  */
 typedef struct image_data {
 
     /* Non compression pixel data */
-    pixel *pixels;
+    //pixel *pixels;
+    
+    cip_buf *buf;
     /* Image size*/
     int width;
     int height;
-    /* Bit number of color*/
-    int depth;
+    /* Bit depth of each buffer */
+    short depth;
     /* Image color channel, gray: 1 channel, rgb: 3 channel*/
-    int channel;
-    
-    /* For read image filename */
-    char *filename;
+    int channel;    
 
-} cipImg;
+} cip_img;
 
 
 /* Base image pointer */
-typedef cipImg *cipImgPtr;
+typedef cip_img *cip_img_ptr;
 
 /* Declare function to manipulate images */
 
 /*
- * cipImgCreate - Create basic image data structure.
+ * cip_img_create - Create basic image data structure and allocate
+ * buffer memory.
+ * .
  * @width: image width
  * @height: image height
+ * @channel: image channel
  *
- * TODO:Still need to add more information
+ * TODO:Still need to add more information, and check exception condtion
  *
  */
-cipImgPtr cipImgCreate(int width, int height);
+cip_img_ptr cip_create_img(int width, int height, int channel, int depth);
 
 /*
- * cipImgDestory - Destory image 
+ * cip_img_create_empty - Create empty image data structure without * buffer memory.
+ *
+ *
+ * TODO: Not implement yet.
+ */
+cip_img_ptr cip_create_empty_img(int width, int height, int channel, int depth);
+
+/*
+ * cip_allocate_img_buf - Allocate image buffer data in cip image.
+ *
+ * TODO: Check whether destory buffer is existed or not. If is 
+ * existed, this function can use already allocate buffer 
+ * assign to input image.
+ *
+ * NOTE: Input parameter should use pointer of pointer because 
+ * we want to modify member in input parameter. 
+ */
+int cip_allocate_img_buf(cip_img_ptr *input);
+
+/* Copy destination image 
+ *
+ * TODO: Not implement yet.
+ */
+cip_img_ptr cip_copy_img(cip_img_ptr input);
+
+/*
+ * cip_img_destory - Destory image 
  * @img: 
  *
  * TODO:Can change to not free image immediately but also
  * can use its malloc memory to set new buffer. 
  */
-void cipImgDestory(cipImgPtr img);
+void cip_destory_img(cip_img_ptr img);
 
 /*
  *
  */
-cipImgPtr cipImgRead(char *filename);
+cip_img cip_read_img(char *filename);
 
 /* */
-void cipFree(cipImgPtr img);
+void cip_free(cip_img_ptr img);
+
 
 /* Helper macro */
-#define getImgWidth(im) (im)->width
-#define getImgHeight(im) (im)->height
-#define getImgPixel(im, x, y) \
-    im->pixels[y * img->width + x]
+#define cip_get_img_width(im) (im)->width
+#define cip_get_img_height(im) (im)->height
+#define cip_img_buf_is_null(im) (im)->buf == NULL
+
+/* cip_get_img_buf - get image buffer value with specific position*
+ * 
+ *
+ */
+#define cip_get_img_buf(img, x, y, c) \
+    img->buf[c * img->width * img->height + y * img->width + x] * ((1U << img->depth) - 1)
+
+/* cip_set_img_buf - set image buffer value with specific position 
+ *
+ */
+#define cip_set_img_buf(img, x, y, c, val) \
+    img->buf[c * img->width * img->height + y * img->width + x] = ((val) / (cip_buf) ((1U << img->depth) - 1));
+
+/* cip_get_img_buf_norm - get image normallized value with specific position
+ *
+ */
+#define cip_get_img_buf_norm(img, x, y, c) \
+    img->buf[c * img->width * img->height + y * img->width + x]
+
+/* cip_set_img_buf_norm - set image normallized value with specific position
+ *
+ */
+#define cip_set_img_buf_norm(img, x, y, c, val) \
+    img->buf[c * img->width * img->height + y * img->width + x] = (val)
+
+
+/* cip_add_img_buf_norm - add image buf in normallized range with specific postion
+ */
+#define cip_add_img_buf_norm(img, x, y, c, val) \
+    img->buf[c * img->width * img->height + y * img->width + x] += (val)
 
 #ifdef __cplusplus
 }

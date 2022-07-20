@@ -6,11 +6,13 @@
 
 
 /* Create cip image point with bmp image  */
-cipImgPtr cipCreateFromBmp(char *filename) {
-    cipImgPtr im = NULL;
+cip_img_ptr cip_img_load_from_bmp(char *filename) {
+    
+    cip_img_ptr im = NULL;
+    
     FILE *fp = fopen(filename, "r");
     if (!fp)
-        return NULL;
+        return im;
 
     bmp_fhd_t *bmp_fhd = (bmp_fhd_t *)malloc(sizeof(bmp_fhd_t));
     if (!bmp_fhd)
@@ -29,10 +31,12 @@ cipImgPtr cipCreateFromBmp(char *filename) {
         goto free_info;
 
     /* Create default image data */
-    im = cipImgCreate(bmp_info->width, bmp_info->height);
+    im = cip_create_img(bmp_info->width, bmp_info->height, bmp_info->bit_per_pixel / BYTE_SIZE, BYTE_SIZE);
 
-    if (!im)
+    if (!im || cip_img_buf_is_null(im)) {
+        cip_destory_img(im);
         goto free_info;
+    }
 
     /* For debug to show bmp header file*/
     show_bmp_file_header(bmp_fhd);
@@ -54,7 +58,7 @@ cipImgPtr cipCreateFromBmp(char *filename) {
     }
     
     if (!success)
-        cipImgDestory(im);        
+        cip_destory_img(im);        
 
 free_info:
     free(bmp_info);
@@ -69,14 +73,14 @@ free_fp:
 }
 
 /* Save cip image to bmp file */
-int cipSaveToBmp(const char *filename, cipImgPtr img)
+int cip_img_save_to_bmp(const char *filename, cip_img_ptr img)
 {
-    if (!filename || !img) 
+    if (!filename || cip_img_buf_is_null(img)) 
         return 0;
     
     /* TODO: Still need to add channel and depth information */
-    if (img->channel != 3 || img->depth != 8) {
-        printf("Still not assign channel and depth information into img!\n");
+    if (img->depth != 8) {
+        printf("Still not assign depth information into img!\n");
         return 0;
     }
 
@@ -117,15 +121,15 @@ int cipSaveToBmp(const char *filename, cipImgPtr img)
     int padding = (img->width * img->channel) % 4;
     padding = padding ? 4 - padding : padding;
 
-    int xpos, ypos;
-    pixel p;
+    int xpos, ypos, ch;
+    cip_buf p;
     for (ypos = 0; ypos < img->height; ypos++) {
         for (xpos = 0; xpos < img->width; xpos++) {
             /* Get specific pixel, write to the file with bgr order*/
-            p = getImgPixel(img, xpos, ypos);
-            fputc(p.blue, out);
-            fputc(p.green, out);
-            fputc(p.red, out);
+            for (ch = 0; ch < img->channel; ch++) {
+                p = cip_get_img_buf(img, xpos, ypos, ch);   
+                fputc((unsigned char) p, out); 
+            }    
         }
         /* Scan padding bytes in the end of row */
         for (xpos = 0; xpos < padding; xpos++) {
@@ -135,6 +139,7 @@ int cipSaveToBmp(const char *filename, cipImgPtr img)
 
     fclose(out);
 
+    return 1;
 }
 
 
@@ -211,7 +216,7 @@ static int read_bmp_info_header_v3(FILE *fp, bmp_info_t *info) {
 }
 
 /* Populate bmp pixel buffer into image data */
-static int populate_img_pixel(cipImgPtr img, bmp_fhd_t *fhd, bmp_info_t *info, FILE *fp)
+static int populate_img_pixel(cip_img_ptr img, bmp_fhd_t *fhd, bmp_info_t *info, FILE *fp)
 {
     /* Current version only support non compression populate
      * method.
@@ -229,15 +234,7 @@ static int populate_img_pixel(cipImgPtr img, bmp_fhd_t *fhd, bmp_info_t *info, F
         return 0;
     }
 
-    img->pixels = (pixel *)malloc(img->width * img->height * sizeof(pixel));
-    if (!img->pixels) {
-        printf("Can't malloc the image pixel buffer.\n");
-        return 0;
-    }
 
-    img->depth = BYTE_SIZE;
-    img->channel = info->bit_per_pixel / BYTE_SIZE;
-        
     /*
      * Calculate padding size. The size of each row is rounded up to a multiple
      * of 4 bytes (a 32 bits DWORD) by padding. Padding bytes must be appended
@@ -257,16 +254,14 @@ static int populate_img_pixel(cipImgPtr img, bmp_fhd_t *fhd, bmp_info_t *info, F
     int padding = ((info->width * (info->bit_per_pixel / BYTE_SIZE)) % 4);
     padding = padding ? 4 - padding : padding;
 
-    int index, ypos, xpos;
-    char pad;
+    int index, ypos, xpos, ch;
+    unsigned char pdata, pad;
     for (ypos = 0; ypos < info->height; ypos++) {
         for (xpos = 0; xpos < info->width; xpos++) {
-            index = ypos * info->width + xpos;
-            if (!cip_read_char(&img->pixels[index].blue, fp) || 
-                 !cip_read_char(&img->pixels[index].green, fp) ||
-                 !cip_read_char(&img->pixels[index].red, fp) 
-               ) {
-                return 0;
+            for (ch = 0; ch < img->channel; ch++) {
+                if (!cip_read_char(&pdata, fp))
+                    return 0;
+                cip_set_img_buf(img, xpos, ypos, ch, (float)pdata); 
             }
         }
 

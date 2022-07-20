@@ -90,7 +90,7 @@ typedef struct bmp_info_header {
  *
  * Return: the pointer of cip image, %NULL if read bmp file occur error.
  */
-cipImgPtr cipCreateFromBmp(char *filename); 
+cip_img_ptr cip_img_load_from_bmp(char *filename); 
 
 /* 
  * cipSaveTpBmp - Save cip image to bmp file.
@@ -100,7 +100,7 @@ cipImgPtr cipCreateFromBmp(char *filename);
  * Return: true for save success, false for save occur error.
  *
  */
-int cipSaveToBmp(const char *filename, cipImgPtr img);
+int cip_img_save_to_bmp(const char *filename, cip_img_ptr img);
 
 /*
  * read_bmp_file_header - Read bmp file file header
@@ -149,7 +149,7 @@ static int read_bmp_info_header_v3(FILE *fp, bmp_info_t *info);
  * TODO: Add more compression method.
  *
  */
-static int populate_img_pixel(cipImgPtr img, bmp_fhd_t *fhd, bmp_info_t *info, FILE *fp);
+static int populate_img_pixel(cip_img *img, bmp_fhd_t *fhd, bmp_info_t *info, FILE *fp);
 
 /*
  * show_bmp_file_header - Show bmp file header infomation
